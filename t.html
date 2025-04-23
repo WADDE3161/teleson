@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Tilt Visualization</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .tilt-indicator {
+            width: 200px;
+            height: 200px;
+            margin: 30px auto;
+            position: relative;
+            background-color: #eee;
+            border-radius: 50%;
+            overflow: hidden;
+        }
+        .level-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 180px;
+            height: 180px;
+            margin-left: -90px;
+            margin-top: -90px;
+            background-color: rgba(0, 150, 255, 0.3);
+            border-radius: 50%;
+            transition: transform 0.1s;
+        }
+        .crosshair {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+        .crosshair:before, .crosshair:after {
+            content: '';
+            position: absolute;
+            background-color: rgba(0,0,0,0.2);
+        }
+        .crosshair:before {
+            width: 100%;
+            height: 1px;
+            top: 50%;
+            left: 0;
+        }
+        .crosshair:after {
+            width: 1px;
+            height: 100%;
+            left: 50%;
+            top: 0;
+        }
+        .data-display {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+        .permission-btn {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        .permission-btn:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Device Tilt Visualization</h1>
+        <p>Tilt your device to see the indicator move</p>
+        
+        <div class="tilt-indicator">
+            <div class="level-indicator" id="levelIndicator"></div>
+            <div class="crosshair"></div>
+        </div>
+        
+        <div class="data-display">
+            <p>Beta (front-to-back tilt): <span id="betaValue">0</span>°</p>
+            <p>Gamma (left-to-right tilt): <span id="gammaValue">0</span>°</p>
+            <p>Alpha (compass direction): <span id="alphaValue">0</span>°</p>
+        </div>
+        
+        <button class="permission-btn" id="permissionBtn">Request Device Orientation Permission</button>
+    </div>
+
+    <script>
+        const levelIndicator = document.getElementById('levelIndicator');
+        const betaValue = document.getElementById('betaValue');
+        const gammaValue = document.getElementById('gammaValue');
+        const alphaValue = document.getElementById('alphaValue');
+        const permissionBtn = document.getElementById('permissionBtn');
+
+        // Check if DeviceOrientationEvent is supported
+        if (window.DeviceOrientationEvent) {
+            // Request permission on iOS 13+ devices
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                permissionBtn.style.display = 'block';
+                permissionBtn.addEventListener('click', requestPermission);
+            } else {
+                permissionBtn.style.display = 'none';
+                startOrientationListener();
+            }
+        } else {
+            alert('Device orientation not supported on this device');
+            permissionBtn.style.display = 'none';
+        }
+
+        function requestPermission() {
+            DeviceOrientationEvent.requestPermission()
+                .then(response => {
+                    if (response === 'granted') {
+                        permissionBtn.style.display = 'none';
+                        startOrientationListener();
+                    } else {
+                        alert('Permission not granted');
+                    }
+                })
+                .catch(console.error);
+        }
+
+        function startOrientationListener() {
+            window.addEventListener('deviceorientation', (event) => {
+                // Update the tilt indicator
+                const beta = event.beta;  // -180 to 180 (front-to-back tilt)
+                const gamma = event.gamma; // -90 to 90 (left-to-right tilt)
+                const alpha = event.alpha; // 0 to 360 (compass direction)
+                
+                // Limit the values to prevent extreme movements
+                const limitedBeta = Math.max(-90, Math.min(90, beta));
+                const limitedGamma = Math.max(-90, Math.min(90, gamma));
+                
+                // Move the level indicator based on tilt
+                levelIndicator.style.transform = `rotateX(${limitedBeta}deg) rotateY(${-limitedGamma}deg)`;
+                
+                // Update the displayed values
+                betaValue.textContent = beta !== null ? beta.toFixed(1) : 'N/A';
+                gammaValue.textContent = gamma !== null ? gamma.toFixed(1) : 'N/A';
+                alphaValue.textContent = alpha !== null ? alpha.toFixed(1) : 'N/A';
+            });
+        }
+    </script>
+</body>
+</html>
