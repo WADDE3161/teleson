@@ -5,10 +5,10 @@ import re
 from datetime import datetime
 
 # ------------------- Config -------------------
-HOST = "34.93.153.50"
+HOST = ""
 PORT = 22
-USERNAME = "bmpl"
-PASSWORD = "BMPL@Nokia#05092025"
+USERNAME = ""
+PASSWORD = ""
 
 UPLOAD_PATHS = {
     "1": "/SCFT_Regeneration/MAH_MUM_ROB/4G/Bharti_4G",
@@ -171,3 +171,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
