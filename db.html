@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebDB Manager Pro</title>
+    <style>
+        :root {
+            --bg: #0f172a; --panel: #1e293b; --accent: #38bdf8;
+            --text: #f1f5f9; --text-muted: #94a3b8;
+            --danger: #ef4444; --border: #334155; --success: #22c55e;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg); color: var(--text);
+            display: flex; height: 100vh; margin: 0; overflow: hidden;
+        }
+        /* Sidebar */
+        #sidebar {
+            width: 200px; background: var(--panel);
+            margin: 5px 0 5px 5px;
+            border-radius: 12px;
+            border-right: 1px solid var(--border);
+            padding: 20px; display: flex; flex-direction: column;
+        }
+        .sidebar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        #db-list { 
+            flex: 1; 
+            overflow-y: auto; 
+            overflow: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        #sidebar2 {
+            width: 200px; background: var(--panel);
+            margin: 5px 0 5px 5px;
+            border-radius: 12px;
+            border-right: 1px solid var(--border);
+            padding: 10px; display: flex; flex-direction: column;
+        }
+        .sidebar-header2 { display: flex; justify-content: space-between; padding-left: 10px; align-items: center; margin-bottom: 12px; }
+        #dir-list { 
+            flex: 1; 
+            overflow-y: auto; 
+            overflow: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        #tree { flex:1; overflow:auto; padding:10px; }
+        .tree-item { padding:6px; border-radius:6px; cursor:pointer; user-select:none; }
+        .tree-item:hover { background:#334155; }
+        .folder::before { content:"📁 "; }
+        .file::before { content:"📄 "; }
+        .drag-over { background:#475569!important; }
+        .collapsed > .children { display:none; }
+        .context-menu { position:fixed; background:#1e293b; border:1px solid var(--border); border-radius:6px; display:none; z-index:999; }
+        .context-menu div { padding:8px 12px; cursor:pointer; }
+        .context-menu div:hover { background:#334155; }
+        .db-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px; margin: 4px 0; border-radius: 8px;
+            cursor: pointer; transition: 0.2s; border: 1px solid transparent;
+        }
+        .db-row:hover { background: #334155; }
+        .db-active { background: #334155; border-color: var(--accent); color: var(--accent); }
+        
+        /* Main Content */
+        #main { flex: 1; display: flex; flex-direction: column; padding: 5px; overflow: hidden; }
+        .toolbar { display: flex; gap: 10px; margin-bottom: 5px; align-items: center; }
+        #search-input {
+            flex: 1; background: var(--panel); border: 1px solid var(--border);
+            color: white; padding: 10px 15px; border-radius: 8px; outline: none;
+        }
+        #search-input:focus { border-color: var(--accent); }
+
+        /* Table */
+        .table-container { flex: 1; overflow-y: auto; background: var(--panel); border-radius: 12px; border: 1px solid var(--border); 
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 14px; border-bottom: 1px solid var(--border); }
+        th { background: #1e293b; position: sticky; top: 0; font-size: 11px; text-transform: uppercase; color: var(--text-muted); }
+        tr:hover { background: #232f45; }
+
+        /* Buttons */
+        .btn {
+            cursor: pointer; padding: 8px 14px; border-radius: 6px; border: none;
+            font-weight: 500; font-size: 13px; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn-primary { background: var(--accent); color: #0f172a; }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+        .btn-danger-text { color: var(--danger); background: transparent; }
+        .btn-danger-text:hover { background: rgba(239, 68, 68, 0.1); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* Modal */
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(2px); display: none; z-index: 100; }
+        .modal {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: var(--panel); padding: 10px; border-radius: 12px;
+            border: 1px solid var(--border); width: 90%; max-width: 1000px;
+            z-index: 101; display: none;
+        }
+        textarea {
+            width: 100%; height: 450px; background: #0f172a; color: #38bdf8;
+            border: 2px solid var(--border); border-radius: 8px; padding: 5px;
+            font-family: monospace; font-size: 14px; outline: none; margin: 5px 0; resize: none;
+            overflow: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        #change-indicator { font-size: 12px; color: var(--success); display: none; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <div class="sidebar-header">
+        <h3 style="margin: 0;">WebDB</h3>
+        <button class="btn btn-outline" onclick="createNewDB()">+</button>
+    </div>
+    <div id="db-list"></div>
+</div>
+<div id="sidebar2">
+    <div class="sidebar-header2">
+        <h3 style="margin: 0;">Directory</h3>
+        <button class="btn btn-outline" onclick="createFolder()">+</button>
+    </div>
+    <div id="dir-list">
+        <div id="tree"></div>
+        <div id="menu" class="context-menu"></div>
+    </div>
+</div>
+<div id="main">
+    <div class="toolbar">
+        <input type="text" id="search-input" placeholder="Search files..." oninput="explorer.render()">
+        <button class="btn btn-primary" onclick="createNewFile()">+ New File</button>
+        <button class="btn btn-outline" onclick="explorer.currentStore.export()">Backup</button>
+        <button class="btn btn-outline" onclick="document.getElementById('import-file').click()">Import</button>
+        <input type="file" id="import-file" style="display:none" onchange="handleFileImport(event)">
+    </div>
+    
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr><th>Filename</th><th>Type</th><th>Size</th><th>Modified</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="file-table"></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="overlay" id="modal-overlay" onclick="closeModal()"></div>
+<div class="modal" id="edit-modal">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 id="modal-title" style="margin: 0;">Edit</h3>
+        <div id="change-indicator">● Unsaved Changes</div>
+    </div>
+    <textarea id="modal-content" oninput="checkChanges()" spellcheck="false"></textarea>
+    <div style="display: flex; justify-content: flex-end; gap: 5px;">
+        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" id="save-file-btn" disabled>Save Changes</button>
+    </div>
+</div>
+
+<script>
+/** 1. ENGINE **/
+class WebDB {
+    constructor() {
+        this.registryName = "System_Registry";
+        this.registryStore = "databases";
+        this.dbInstances = new Map();
+        this._regPromise = null;
+    }
+    async _connectRegistry() {
+        if (this._regPromise) return this._regPromise;
+        this._regPromise = new Promise((res, rej) => {
+            const req = indexedDB.open(this.registryName, 1);
+            req.onupgradeneeded = (e) => {
+                if (!e.target.result.objectStoreNames.contains(this.registryStore)) {
+                    e.target.result.createObjectStore(this.registryStore, { keyPath: "name" });
+                }
+            };
+            req.onsuccess = () => res(req.result);
+            req.onerror = () => rej(req.error);
+        });
+        return this._regPromise;
+    }
+    async use(dbName) {
+        if (this.dbInstances.has(dbName)) return this.dbInstances.get(dbName);
+        const reg = await this._connectRegistry();
+        const tx = reg.transaction(this.registryStore, "readwrite");
+        tx.objectStore(this.registryStore).put({ name: dbName, updated: Date.now() });
+        const store = new FileStore(dbName);
+        await store._init();
+        this.dbInstances.set(dbName, store);
+        return store;
+    }
+    async listDatabases() {
+        const reg = await this._connectRegistry();
+        return new Promise(res => {
+            const tx = reg.transaction(this.registryStore, "readonly");
+            tx.objectStore(this.registryStore).getAll().onsuccess = (e) => res(e.target.result);
+        });
+    }
+    async dropDatabase(dbName) {
+        return new Promise(resolve => {
+            const req = indexedDB.deleteDatabase(dbName);
+            req.onsuccess = async () => {
+                const reg = await this._connectRegistry();
+                const tx = reg.transaction(this.registryStore, "readwrite");
+                tx.objectStore(this.registryStore).delete(dbName);
+                this.dbInstances.delete(dbName);
+                resolve(true);
+            };
+        });
+    }
+}
+
+let items=[],dragItem=null,expanded={}
+function uuid(){return Math.random().toString(36).substr(2,9)}
+
+// FIXED: Renamed global refresh to avoid class method conflict
+async function refreshTree(){
+    if(!explorer.currentStore) return;
+    items=await explorer.currentStore.getAll();
+    renderTree();
+}
+
+function buildTree(parent=null){return items.filter(i=>i.parent===parent)}
+
+class FileStore {
+    constructor(dbName) { this.dbName = dbName; this.db = null; this._initPromise = null; }
+    async _init() {
+        if (this.db) return this.db;
+        if (this._initPromise) return this._initPromise;
+        this._initPromise = new Promise((res, rej) => {
+            const req = indexedDB.open(this.dbName, 1);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains("items")) { // items
+                    const s = db.createObjectStore("items", { keyPath: "id" }); // filename
+                    s.createIndex("parent", "parent");
+                }
+            };
+            req.onsuccess = () => { this.db = req.result; res(this.db); };
+            req.onerror = () => rej(req.error);
+        });
+        return this._initPromise;
+    }
+    async save(filename, content, parent=null) {
+        const db = await this._init();
+        const ext = filename.split('.').pop().toLowerCase();
+        const now = Date.now();
+        const existing = await this.getRaw(filename);
+        let finalContent = content, size = 0;
+        const isBinary = (content instanceof Blob);
+        if (isBinary) {
+            finalContent = content; size = content.size;
+        } else {
+            if (ext === 'json' && typeof content !== 'string') finalContent = JSON.stringify(content);
+            size = new TextEncoder().encode(finalContent).length;
+        }
+        // FIXED: Added 'id: filename' so it aligns with your keyPath
+        const record = { id: filename, filename, ext, content: finalContent, size, createdAt: existing ? existing.createdAt : now, modifiedAt: now, "parent":parent };
+        const tx = db.transaction("items", "readwrite");
+        tx.objectStore("items").put(record);
+        return new Promise(res => tx.oncomplete = () => res(record));
+    }
+    async getRaw(filename) {
+        const db = await this._init();
+        const tx = db.transaction("items", "readonly");
+        return new Promise(res => tx.objectStore("items").get(filename).onsuccess = (e) => res(e.target.result));
+    }
+    async list() {
+        const db = await this._init();
+        const tx = db.transaction("items", "readonly");
+        return new Promise(res => tx.objectStore("items").getAll().onsuccess = (e) => {
+            res(e.target.result.map(f => ({
+                filename: f.filename, type: f.ext, size: (f.size ? (f.size / 1024).toFixed(2) + " KB" : "0 KB"),
+                modified: new Date(f.modifiedAt).toLocaleString()
+            })).filter(f => f.filename)); // Only return ones with filenames for the table
+        });
+    }
+    
+    // FIXED: Wrapped transaction in promises so 'await' works correctly
+    async add(item){
+        return new Promise((resolve, reject) => {
+            const tx=this.db.transaction("items","readwrite");
+            tx.objectStore("items").put(item);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    }
+    async delete(id){
+         return new Promise((resolve, reject) => {
+            const tx=this.db.transaction("items","readwrite");
+            tx.objectStore("items").delete(id);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    }
+    async getAll(){
+        return new Promise(res=>{
+           const tx=this.db.transaction("items","readonly")
+           tx.objectStore("items").getAll().onsuccess=e=>res(e.target.result)
+        })
+    }
+    async remove(filename) {
+        const db = await this._init();
+        const tx = db.transaction("items", "readwrite");
+        tx.objectStore("items").delete(filename);
+        return new Promise(res => tx.oncomplete = () => res(true));
+    }
+    async export() {
+        const db = await this._init();
+        const tx = db.transaction("items", "readonly");
+        tx.objectStore("items").getAll().onsuccess = async (e) => {
+            const files = e.target.result;
+            const serialized = await Promise.all(files.map(async f => {
+                if (f.content instanceof Blob) {
+                    const buffer = await f.content.arrayBuffer();
+                    const base64 = btoa(Array.from(new Uint8Array(buffer)).map(b => String.fromCharCode(b)).join(''));
+                    f.content = `data:${f.content.type};base64,${base64}`; f._isBinary = true;
+                }
+                return f;
+            }));
+            const blob = new Blob([JSON.stringify(serialized)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = `${this.dbName}_backup.json`; a.click();
+        };
+    }
+}
+
+/** 2. UI LOGIC **/
+const dbManager = new WebDB();
+let originalData = "", currentFilename = ""; currentParentname = null;
+
+class UIExplorer {
+    constructor() { this.currentStore = null; this.items = []; }
+    async switchDB(name) {
+        this.currentStore = await dbManager.use(name);
+        this.refresh();
+    }
+    async refresh() {
+        if (!this.currentStore) return;
+        this.items = await this.currentStore.list();
+        this.render();
+        this.updateSidebar();
+        // FIXED: Removed undefined this.getAll() and called global refreshTree
+        await refreshTree();
+    }
+    async updateSidebar() {
+        const dbs = await dbManager.listDatabases();
+        document.getElementById('db-list').innerHTML = dbs.map(db => `
+            <div class="db-row ${this.currentStore?.dbName === db.name ? 'db-active' : ''}" onclick="explorer.switchDB('${db.name}')">
+                <span>${db.name}</span>
+                <button class="btn-danger-text btn" onclick="event.stopPropagation(); deleteDatabase('${db.name}')">🗑️</button>
+            </div>
+        `).join('');
+       // renderTree();
+    }
+    render() {
+        const q = document.getElementById('search-input').value.toLowerCase();
+        const filtered = this.items.filter(f => f.filename && f.filename.toLowerCase().includes(q));
+        document.getElementById('file-table').innerHTML = filtered.map(f => `
+            <tr>
+                <td><b>${f.filename}</b></td>
+                <td><span style="color:var(--text-muted)">.${f.type}</span></td>
+                <td>${f.size}</td>
+                <td>${f.modified}</td>
+                <td>
+                    <button class="btn btn-outline" onclick="openEditor('${f.filename}')">Edit</button>
+                    <button class="btn btn-outline" onclick="renameFile('${f.filename}',${f.parent})">Rename</button>
+                    <button class="btn btn-danger-text" onclick="deleteFile('${f.filename}')">Del</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+}
+const explorer = new UIExplorer();
+
+function renderTree(){
+ const container=document.getElementById("tree")
+ container.innerHTML=""
+
+ function render(parent,el){
+  buildTree(parent).forEach(c=>{
+   const wrapper=document.createElement("div")
+   const div=document.createElement("div")
+   div.className="tree-item "+c.type
+   div.textContent=c.name || c.filename // fallback for table-created files
+   div.draggable=true
+
+   div.onclick=()=>{
+    if(c.type==="folder"){
+     expanded[c.id]=!expanded[c.id]
+     renderTree()
+    }
+    document.getElementById("output").textContent=JSON.stringify(c,null,2)
+   }
+
+   div.oncontextmenu=(e)=>{
+    e.preventDefault();showMenu(e,c)
+   }
+
+   div.ondragstart=()=>dragItem=c
+   div.ondragover=e=>{e.preventDefault();div.classList.add("drag-over")}
+   div.ondragleave=()=>div.classList.remove("drag-over")
+   div.ondrop=async e=>{
+    e.preventDefault();div.classList.remove("drag-over")
+    if(c.type==="folder" && dragItem.id!==c.id){
+     dragItem.parent=c.id
+     // FIXED: Changed undefined store to explorer.currentStore
+     await explorer.currentStore.add(dragItem)
+     refreshTree()
+    }
+   }
+
+   wrapper.appendChild(div)
+
+   if(c.type==="folder"){
+    const child=document.createElement("div")
+    child.className="children"
+    child.style.marginLeft="15px"
+    if(!expanded[c.id]) child.style.display="none"
+    wrapper.appendChild(child)
+    render(c.id,child)
+   }
+
+   el.appendChild(wrapper)
+  })
+ }
+ render(null,container)
+}
+
+function showMenu(e,item){
+ const menu=document.getElementById("menu")
+ menu.innerHTML=`
+  <div onclick="renameFile('${item.filename}','${item.parent}')">Rename</div>
+  <div onclick="deleteFile('${item.id}')">Delete</div>
+  ${item.type==='folder'?`<div onclick="createFolder('${item.id}')">New Folder</div>
+  <div onclick="createNewFile('${item.id}')">New File</div>`:`<div onclick="openEditor('${item.filename}')">Edit</div>`}
+ `
+ menu.style.left=e.pageX+'px'
+ menu.style.top=e.pageY+'px'
+ menu.style.display='block'
+}
+
+document.body.onclick=()=>document.getElementById("menu").style.display='none'
+
+async function deleteItem(id){
+ if(!confirm("Delete?"))return
+ await explorer.currentStore.delete(id)
+ refreshTree()
+}
+
+async function createFolder(parent=null){
+ const name=prompt("Folder name")
+ if(!name)return
+ await explorer.currentStore.add({id:uuid(),name,type:"folder",parent})
+ refreshTree()
+}
+
+async function createFile(parent=null){
+ const name=prompt("File name")
+ if(!name)return
+ await explorer.currentStore.add({id:uuid(),name,type:"file",parent})
+ refreshTree()
+}
+
+/** 3. ACTIONS **/
+async function createNewFile(parent=null) {
+    const fn = prompt("New filename (e.g. data.json):");
+    if (fn) { await explorer.currentStore.save(fn, fn.endsWith('.json') ? "{}" : "",parent); explorer.refresh(); }
+}
+
+async function renameFile(old,parent=null) {
+    const nn = prompt("New name:", old);
+    if (!nn || nn === old) return;
+    const rec = await explorer.currentStore.getRaw(old);
+    await explorer.currentStore.save(nn, rec.content, rec.parent);
+    await explorer.currentStore.remove(old);
+    explorer.refresh();
+}
+
+async function openEditor(filename) {
+    const record = await explorer.currentStore.getRaw(filename);
+    currentFilename = filename;
+    currentParentname = record.parent;
+    const isBin = record.content instanceof Blob;
+    originalData = isBin ? "[Binary Data]" : (record.ext === 'json' ? JSON.stringify(record.content, null, 2) : record.content);
+    
+    document.getElementById('modal-title').innerText = `Edit: ${filename}`;
+    document.getElementById('modal-content').value = originalData;
+    document.getElementById('modal-content').readOnly = isBin;
+    checkChanges();
+    
+    document.getElementById('edit-modal').style.display = 'block';
+    document.getElementById('modal-overlay').style.display = 'block';
+}
+
+function checkChanges() {
+    const current = document.getElementById('modal-content').value;
+    const changed = current !== originalData;
+    document.getElementById('save-file-btn').disabled = !changed;
+    document.getElementById('change-indicator').style.display = changed ? 'block' : 'none';
+}
+
+function closeModal(force = false) {
+    if (!force && document.getElementById('modal-content').value !== originalData) {
+        if (!confirm("Discard unsaved changes?")) return;
+    }
+    document.getElementById('edit-modal').style.display = 'none';
+    document.getElementById('modal-overlay').style.display = 'none';
+}
+
+async function handleSave() {
+    const content = document.getElementById('modal-content').value;
+    let final = content;
+    if (currentFilename.endsWith('.json')) {
+        try { final = JSON.parse(content); } catch(e) { return alert("Invalid JSON"); }
+    }
+    await explorer.currentStore.save(currentFilename, final,currentParentname);
+    originalData = content;
+    closeModal(true);
+    explorer.refresh();
+}
+
+async function createNewDB() {
+    const n = prompt("DB Name:");
+    if (n) { await dbManager.use(n); explorer.switchDB(n); }
+}
+
+async function deleteDatabase(n) {
+    if (confirm(`Delete database "${n}"?`)) { await dbManager.dropDatabase(n); window.location.reload();}
+}
+
+async function deleteFile(n) {
+    if (confirm(`Delete ${n}?`)) { await explorer.currentStore.remove(n); explorer.refresh(); }
+}
+
+async function handleFileImport(e) {
+    // FIXED: Changed e.target.items[0] to e.target.files[0]
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+        const data = JSON.parse(ev.target.result);
+        for (let f of data) {
+            if (f._isBinary) {
+                const resp = await fetch(f.content);
+                f.content = await resp.blob();
+            }
+            if(f.type == "folder"){
+              await explorer.currentStore.add({id:f.id,name:f.name,type:"folder",parent:f.parent})
+            }else{
+              await explorer.currentStore.save(f.filename, f.content, f.parent);
+            }
+        }
+        explorer.refresh();
+    };
+    reader.readAsText(file);
+}
+
+document.getElementById('save-file-btn').onclick = handleSave;
+window.onload = () => explorer.switchDB("root");
+</script>
+</body>
+</html>
